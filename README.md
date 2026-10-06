@@ -1,5 +1,4 @@
-# InfoSSLRec: Contrastive Self-Supervised Sequential Recommendation with Informative Augmentation(All files related to this project are stored in the "relative docs about program" folder.)
-
+# InfoSSLRec: Contrastive Self-Supervised Sequential Recommendation with Informative Augmentation
 InfoSSLRec is a contrastive self-supervised **sequential recommendation** model for dynamic user behavior sequences. The repository also ships a lightweight web system for browsing its recommendations. The model targets three problems that hurt parameter-heavy sequential recommenders:
 
 - **Data sparsity.** Users have few interactions, so the encoder sees too few item-transition patterns.
