@@ -1,0 +1,30 @@
+﻿# Local Python environments
+/env/
+/venv/
+/.venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Editor settings
+.idea/
+.vscode/
+
+# Local environment configuration
+.env
+.env.*
+!.env.example
+
+# Large raw datasets
+/amazon_data/
+/data/Yelp JSON/
+
+# Generated caches and logs
+/data/*_hit_users.json
+*.log
+
+# Operating system files
+Thumbs.db
+.DS_Store

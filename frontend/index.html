@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>infoSSLRec 序列推荐系统</title>
+<style>
+  /* ── 全局 ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3352;
+    --accent: #4f8ef7;
+    --accent2: #7c5cfc;
+    --green: #2ecc71;
+    --yellow: #f1c40f;
+    --red: #e74c3c;
+    --text: #e4e6f0;
+    --muted: #7a84a8;
+    --radius: 10px;
+  }
+  html, body { height: 100%; font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg); color: var(--text); font-size: 14px; }
+
+  /* ── 布局 ── */
+  .layout { display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 56px 1fr;
+    height: 100vh; }
+  .topbar { grid-column: 1/-1; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 20px; gap: 16px; }
+  .topbar h1 { font-size: 17px; font-weight: 700; letter-spacing: .3px; }
+  .topbar h1 span { color: var(--accent); }
+  .badge { background: var(--accent2); color: #fff; font-size: 11px;
+    padding: 2px 8px; border-radius: 20px; }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden; }
+  .main { display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar-section { padding: 14px 16px 8px; }
+  .sidebar-label { font-size: 11px; font-weight: 600; letter-spacing: .8px;
+    color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+  .ds-btn { width: 100%; text-align: left; background: transparent;
+    border: 1px solid var(--border); border-radius: var(--radius); color: var(--text);
+    padding: 10px 12px; cursor: pointer; margin-bottom: 6px; transition: all .15s; }
+  .ds-btn:hover { background: var(--surface2); border-color: var(--accent); }
+  .ds-btn.active { background: linear-gradient(135deg,#1c2d5c,#1e1040);
+    border-color: var(--accent); }
+  .ds-btn .ds-name { font-weight: 600; font-size: 13px; }
+  .ds-btn .ds-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .ds-btn .ds-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); margin-right: 5px; }
+
+  .search-wrap { padding: 0 16px 8px; }
+  .search-wrap input { width: 100%; padding: 7px 10px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--surface2); color: var(--text);
+    font-size: 13px; outline: none; }
+  .search-wrap input::placeholder { color: var(--muted); }
+
+  .user-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+  .user-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border-radius: 8px; cursor: pointer; transition: background .12s; }
+  .user-item:hover { background: var(--surface2); }
+  .user-item.active { background: linear-gradient(90deg,#1c2d5c44,transparent);
+    border-left: 3px solid var(--accent); }
+  .user-avatar { width: 32px; height: 32px; border-radius: 8px;
+    background: var(--surface2); display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+  .user-info .uid { font-weight: 600; font-size: 13px; }
+  .user-info .ulen { font-size: 11px; color: var(--muted); }
+
+  /* ── 命中筛选条 ── */
+  .filter-bar { padding: 8px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; }
+  .filter-btn { flex: 1; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); cursor: pointer; font-size: 12px;
+    font-weight: 600; transition: all .15s; text-align: center; }
+  .filter-btn:hover:not(:disabled) { background: var(--surface2); }
+  .filter-btn.active { background: linear-gradient(135deg,#0f2d1a,#1a3520);
+    border-color: var(--green); color: var(--green); }
+  .filter-btn:disabled { opacity: .4; cursor: default; }
+  .hit-badge { font-size: 10px; font-weight: 700; padding: 1px 5px;
+    background: var(--green); color: #fff; border-radius: 4px; margin-left: 4px; }
+
+  .pagination { padding: 8px 16px; display: flex; gap: 6px; align-items: center;
+    border-top: 1px solid var(--border); }
+  .page-btn { padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); cursor: pointer; font-size: 12px; }
+  .page-btn:hover:not(:disabled) { background: var(--surface2); }
+  .page-btn:disabled { opacity: .35; cursor: default; }
+  .page-info { font-size: 12px; color: var(--muted); flex: 1; text-align: center; }
+
+  /* ── Main ── */
+  .main-header { padding: 16px 24px 12px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .main-header h2 { font-size: 15px; font-weight: 700; }
+  .main-header .hint { font-size: 12px; color: var(--muted); margin-left: auto; }
+  .run-btn { background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; border: none; padding: 8px 20px; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity .15s; }
+  .run-btn:hover { opacity: .88; }
+  .run-btn:disabled { opacity: .4; cursor: default; }
+
+  .content { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex;
+    flex-direction: column; gap: 20px; }
+
+  /* ── 空状态 ── */
+  .empty { flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 12px; color: var(--muted); }
+  .empty-icon { font-size: 48px; opacity: .4; }
+
+  /* ── 卡片 ── */
+  .card { background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden; }
+  .card-head { padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+  .card-head .tag { font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    font-weight: 500; }
+  .tag-train { background: #1a3550; color: var(--accent); }
+  .tag-valid { background: #2d2010; color: var(--yellow); }
+  .tag-test  { background: #1f1020; color: var(--accent2); }
+  .tag-answer{ background: #0f2d1a; color: var(--green); }
+
+  /* ── 序列展示 ── */
+  .seq-wrap { padding: 14px 16px; }
+  .seq-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .item-chip { display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;
+    border: 1px solid transparent; }
+  .chip-train { background: #16283d; border-color: #1e4070; color: #7eb6ff; }
+  .chip-valid { background: #2d2210; border-color: #5a4000; color: var(--yellow); }
+  .chip-test  { background: #210f2d; border-color: #4a1070; color: #c07afc; }
+  .item-idx   { font-size: 10px; opacity: .55; }
+  .seq-divider { width: 1px; height: 28px; background: var(--border); margin: 0 4px; }
+  .seq-arrow { color: var(--muted); font-size: 16px; }
+
+  .seq-stats { display: flex; gap: 16px; padding: 10px 16px;
+    border-top: 1px solid var(--border); }
+  .stat { text-align: center; }
+  .stat-val { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  /* ── 推荐结果 ── */
+  .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px; padding: 14px 16px; }
+  .rec-item { background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; position: relative; transition: border-color .15s;
+    display: flex; flex-direction: column; }
+  .rec-item:hover { border-color: var(--accent); }
+  .rec-item.is-answer { border-color: var(--green);
+    background: linear-gradient(135deg,#0f2d1a,var(--surface2)); }
+  .rec-rank { position: absolute; top: 8px; right: 8px; font-size: 11px;
+    color: var(--muted); font-weight: 600; }
+  /* 有名称时显示名称 */
+  .rec-name { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    overflow: hidden; margin-bottom: 5px; flex: 1; }
+  .rec-meta { font-size: 11px; color: var(--muted); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+  .rec-id-line { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  /* 无名称时只显示大号 ID */
+  .rec-id { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1;
+    margin-bottom: 6px; }
+  .rec-id-label { font-size: 10px; color: var(--muted); margin-bottom: 6px; }
+  .rec-score-bar-wrap { margin-top: 4px; }
+  .rec-score-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+  .rec-score-fill { height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .4s; }
+  .rec-score-val { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .answer-badge { display: inline-block; margin-top: 6px; font-size: 10px; font-weight: 700;
+    background: var(--green); color: #fff; padding: 1px 6px; border-radius: 4px; }
+
+  /* ── Loading / Toast ── */
+  .loading { display: flex; align-items: center; gap: 8px; padding: 20px; color: var(--muted); }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin .6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #e74c3c; color: #fff; padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; z-index: 999; display: none; }
+
+  /* ── 滚动条 ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <h1>infoSSLRec &nbsp;<span>序列推荐系统</span></h1>
+    <span class="badge">演示</span>
+  </header>
+
+  <!-- 左侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">数据集</div>
+      <div id="ds-list">
+        <div class="loading"><div class="spinner"></div>加载中…</div>
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <button class="filter-btn" id="btn-all" onclick="setFilter('all')" disabled>全部用户</button>
+      <button class="filter-btn" id="btn-hit" onclick="setFilter('hit')" disabled>
+        仅命中用户 <span class="hit-badge" id="hit-badge" style="display:none">0</span>
+      </button>
+    </div>
+
+    <div class="search-wrap">
+      <input id="search-input" type="number" placeholder="跳转到用户编号…" min="0">
+    </div>
+
+    <div class="sidebar-label" style="padding:0 16px 4px">用户列表</div>
+    <div class="user-list" id="user-list">
+      <div style="padding:12px 10px;color:var(--muted);font-size:12px">请先选择数据集</div>
+    </div>
+
+    <div class="pagination" id="pagination" style="display:none">
+      <button class="page-btn" id="btn-prev" onclick="changePage(-1)">‹</button>
+      <span class="page-info" id="page-info"></span>
+      <button class="page-btn" id="btn-next" onclick="changePage(1)">›</button>
+    </div>
+  </aside>
+
+  <!-- 主内容区 -->
+  <main class="main">
+    <div class="main-header">
+      <h2 id="main-title">请选择数据集和用户</h2>
+      <span class="hint" id="main-hint"></span>
+      <button class="run-btn" id="run-btn" onclick="runRecommend()" disabled>
+        ▶ 生成推荐
+      </button>
+    </div>
+
+    <div class="content" id="content">
+      <div class="empty">
+        <div class="empty-icon">🔍</div>
+        <div>从左侧选择数据集和用户</div>
+        <div style="font-size:12px">点击"生成推荐"查看模型推荐结果</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';  // 同源，空字符串即可
+let state = {
+  dataset: null,
+  userIdx: null,
+  page: 1,
+  pageSize: 50,
+  totalUsers: 0,
+  filterMode: 'all',   // 'all' | 'hit'
+  hitUsers: null,      // null=未加载, []=加载中/空, [{user_idx,...},...]=已加载
+  hitLoading: false,
+};
+
+// ── Toast ────────────────────────────────────────────────────────────
+function showToast(msg, ms = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', ms);
+}
+
+// ── 初始化：加载数据集列表 ────────────────────────────────────────────
+async function init() {
+  const res = await fetch(`${API}/api/datasets`);
+  const datasets = await res.json();
+  const el = document.getElementById('ds-list');
+  el.innerHTML = '';
+  datasets.forEach(ds => {
+    const btn = document.createElement('button');
+    btn.className = 'ds-btn';
+    btn.innerHTML = `
+      <div class="ds-name"><span class="ds-dot"></span>${ds.label}</div>
+      <div class="ds-meta">${ds.item_size.toLocaleString()} 个物品</div>`;
+    btn.onclick = () => selectDataset(ds.name, btn);
+    el.appendChild(btn);
+  });
+}
+
+// ── 选择数据集 ────────────────────────────────────────────────────────
+async function selectDataset(name, btnEl) {
+  document.querySelectorAll('.ds-btn').forEach(b => b.classList.remove('active'));
+  btnEl.classList.add('active');
+  state.dataset = name;
+  state.page = 1;
+  state.userIdx = null;
+  state.filterMode = 'all';
+  state.hitUsers = null;
+  state.hitLoading = false;
+  document.getElementById('run-btn').disabled = true;
+  document.getElementById('main-title').textContent = '请选择用户';
+  document.getElementById('content').innerHTML =
+    '<div class="empty"><div class="empty-icon">👤</div><div>从左侧选择一个用户</div></div>';
+
+  // 启用筛选按钮
+  document.getElementById('btn-all').disabled = false;
+  document.getElementById('btn-all').classList.add('active');
+  document.getElementById('btn-hit').disabled = false;
+  document.getElementById('btn-hit').classList.remove('active');
+  document.getElementById('hit-badge').style.display = 'none';
+
+  await loadUsers();
+}
+
+// ── 筛选模式切换 ──────────────────────────────────────────────────────
+async function setFilter(mode) {
+  if (!state.dataset) return;
+  if (mode === state.filterMode) return;
+
+  state.filterMode = mode;
+  state.page = 1;
+  document.getElementById('btn-all').classList.toggle('active', mode === 'all');
+  document.getElementById('btn-hit').classList.toggle('active', mode === 'hit');
+
+  if (mode === 'hit' && state.hitUsers === null && !state.hitLoading) {
+    await loadHitUsers();
+  } else {
+    await loadUsers();
+  }
+}
+
+// ── 加载命中用户（批量推理，含进度提示）────────────────────────────────
+async function loadHitUsers() {
+  if (!state.dataset || state.hitLoading) return;
+  state.hitLoading = true;
+
+  const el = document.getElementById('user-list');
+  el.innerHTML = `<div style="padding:16px 10px;text-align:center">
+    <div class="spinner" style="margin:0 auto 10px"></div>
+    <div style="color:var(--muted);font-size:12px;line-height:1.6">
+      正在对所有用户批量推理…<br>首次运行需 1~3 分钟<br>结果会缓存，下次秒开
+    </div>
+  </div>`;
+  document.getElementById('pagination').style.display = 'none';
+
+  try {
+    const res  = await fetch(`${API}/api/hit_users/${state.dataset}`);
+    const data = await res.json();
+    if (data.error) { showToast('计算失败：' + data.error); state.hitLoading = false; return; }
+
+    state.hitUsers = data.users;
+    state.hitLoading = false;
+
+    // 更新 badge
+    const badge = document.getElementById('hit-badge');
+    badge.textContent = data.hit_count;
+    badge.style.display = 'inline';
+    document.getElementById('btn-hit').title =
+      `HIT@20 = ${(data.hit_rate*100).toFixed(2)}%  (${data.hit_count}/${data.total_users})`;
+
+    await loadUsers();
+  } catch(e) {
+    showToast('请求失败：' + e.message);
+    state.hitLoading = false;
+  }
+}
+
+// ── 加载用户列表（支持全部 / 仅命中 两种模式）──────────────────────────
+async function loadUsers() {
+  if (!state.dataset) return;
+  const el = document.getElementById('user-list');
+
+  let userList;   // [{user_idx, seq_len, train_len}, ...]
+  let total;
+
+  if (state.filterMode === 'hit' && state.hitUsers !== null) {
+    // 客户端分页：直接用缓存的命中列表
+    total = state.hitUsers.length;
+    const start = (state.page - 1) * state.pageSize;
+    const end   = Math.min(start + state.pageSize, total);
+    userList = state.hitUsers.slice(start, end);
+    state.totalUsers = total;
+  } else if (state.filterMode === 'all') {
+    // 服务端分页
+    el.innerHTML = '<div class="loading"><div class="spinner"></div>加载用户…</div>';
+    const res = await fetch(
+      `${API}/api/users/${state.dataset}?page=${state.page}&page_size=${state.pageSize}`);
+    const data = await res.json();
+    state.totalUsers = data.total;
+    total = data.total;
+    userList = data.users;
+  } else {
+    return;
+  }
+
+  el.innerHTML = '';
+  userList.forEach(u => {
+    const div = document.createElement('div');
+    div.className = 'user-item' + (u.user_idx === state.userIdx ? ' active' : '');
+    div.id = `user-${u.user_idx}`;
+    const colors = ['#4f8ef7','#7c5cfc','#2ecc71','#f1c40f','#e74c3c'];
+    const color  = colors[u.user_idx % colors.length];
+    const hitMark = state.filterMode === 'hit'
+      ? '<span style="font-size:10px;color:var(--green);margin-left:4px">✓ HIT</span>' : '';
+    div.innerHTML = `
+      <div class="user-avatar" style="color:${color}">U${u.user_idx}</div>
+      <div class="user-info">
+        <div class="uid">用户 #${u.user_idx}${hitMark}</div>
+        <div class="ulen">序列长度 ${u.seq_len} &nbsp;·&nbsp; 训练 ${u.train_len}</div>
+      </div>`;
+    div.onclick = () => selectUser(u.user_idx);
+    el.appendChild(div);
+  });
+
+  // 分页控件
+  const totalPages = Math.ceil(total / state.pageSize);
+  document.getElementById('pagination').style.display = 'flex';
+  const modeLabel = state.filterMode === 'hit' ? '命中用户' : '用户';
+  document.getElementById('page-info').textContent =
+    `第 ${state.page} / ${totalPages} 页  (共 ${total} ${modeLabel})`;
+  document.getElementById('btn-prev').disabled = state.page <= 1;
+  document.getElementById('btn-next').disabled = state.page >= totalPages;
+}
+
+async function changePage(delta) {
+  state.page += delta;
+  await loadUsers();
+}
+
+// ── 搜索跳转 ─────────────────────────────────────────────────────────
+document.getElementById('search-input').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  if (!state.dataset) { showToast('请先选择数据集'); return; }
+  const idx = parseInt(e.target.value);
+  if (isNaN(idx)) return;
+
+  if (state.filterMode === 'hit' && state.hitUsers !== null) {
+    // 在命中用户列表里找这个 idx 的位置
+    const pos = state.hitUsers.findIndex(u => u.user_idx === idx);
+    if (pos < 0) { showToast(`用户 #${idx} 不在命中列表中`); return; }
+    state.page = Math.floor(pos / state.pageSize) + 1;
+  } else {
+    state.page = Math.floor(idx / state.pageSize) + 1;
+  }
+  await loadUsers();
+  selectUser(idx);
+  e.target.value = '';
+});
+
+// ── 选择用户 ─────────────────────────────────────────────────────────
+async function selectUser(idx) {
+  state.userIdx = idx;
+  document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById(`user-${idx}`);
+  if (el) { el.classList.add('active'); el.scrollIntoView({block:'nearest'}); }
+
+  document.getElementById('main-title').textContent = `用户 #${idx}`;
+  document.getElementById('run-btn').disabled = false;
+
+  // 加载序列
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div>加载序列…</div>';
+
+  const res  = await fetch(`${API}/api/sequence/${state.dataset}/${idx}`);
+  const data = await res.json();
+  renderSequence(data);
+}
+
+// ── 辅助：从物品对象渲染显示文本 ─────────────────────────────────────
+function itemLabel(it) {
+  // it 可能是 {item_id, title, brand} 或旧格式的纯数字
+  if (typeof it === 'object' && it !== null) {
+    return it.title ? truncate(it.title, 22) : `ID ${it.item_id}`;
+  }
+  return `ID ${it}`;
+}
+function itemTooltip(it) {
+  if (typeof it !== 'object' || it === null) return `物品 ${it}`;
+  const parts = [`ID: ${it.item_id}`];
+  if (it.title)      parts.push(it.title);
+  if (it.brand)      parts.push(`品牌: ${it.brand}`);
+  if (it.categories) parts.push(it.categories);
+  return parts.join('\n');
+}
+function truncate(str, n) {
+  return str && str.length > n ? str.slice(0, n) + '…' : (str || '');
+}
+
+// ── 渲染序列 ─────────────────────────────────────────────────────────
+function renderSequence(data) {
+  const content = document.getElementById('content');
+  const hint = document.getElementById('main-hint');
+  hint.textContent = `${state.dataset} · 总长度 ${data.total_len}`;
+
+  const trainItems = data.train_items;
+  const display = trainItems.slice(-30); // 最多显示最近30个
+  const omitted  = trainItems.length - display.length;
+
+  let chipsHtml = '';
+  if (omitted > 0) {
+    chipsHtml += `<span style="color:var(--muted);font-size:12px">… 省略前 ${omitted} 项 …</span>
+                  <span class="seq-arrow">→</span>`;
+  }
+  display.forEach((it, i) => {
+    const pos = omitted + i;
+    const id  = typeof it === 'object' ? it.item_id : it;
+    chipsHtml += `<span class="item-chip chip-train" title="${itemTooltip(it)}">
+      <span class="item-idx">#${pos+1}</span> ${itemLabel(it)}
+    </span>`;
+  });
+
+  const validIt = data.valid_item;
+  const testIt  = data.test_item;
+  const validId = typeof validIt === 'object' ? validIt.item_id : validIt;
+  const testId  = typeof testIt  === 'object' ? testIt.item_id  : testIt;
+
+  chipsHtml += `<span class="seq-divider"></span>
+    <span class="item-chip chip-valid" title="${itemTooltip(validIt)}">
+      <span class="item-idx">验证</span> ${itemLabel(validIt)}
+    </span>
+    <span class="seq-divider"></span>
+    <span class="item-chip chip-test" title="${itemTooltip(testIt)}">
+      <span class="item-idx">测试</span> ${itemLabel(testIt)}
+    </span>`;
+
+  // 统计栏：有名称时显示名称，否则显示 ID
+  const validDisplay = (typeof validIt === 'object' && validIt.title)
+    ? `<div title="${validIt.title}" style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">${truncate(validIt.title,14)}</div>`
+    : `<div class="stat-val">${validId}</div>`;
+  const testDisplay  = (typeof testIt  === 'object' && testIt.title)
+    ? `<div title="${testIt.title}"  style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px">${truncate(testIt.title, 14)}</div>`
+    : `<div class="stat-val">${testId}</div>`;
+
+  content.innerHTML = `
+    <div class="card" id="seq-card">
+      <div class="card-head">
+        📋 交互序列
+        <span class="tag tag-train">训练 ${trainItems.length}</span>
+        <span class="tag tag-valid">验证 1</span>
+        <span class="tag tag-test">测试 1</span>
+      </div>
+      <div class="seq-wrap">
+        <div class="seq-row">${chipsHtml}</div>
+      </div>
+      <div class="seq-stats">
+        <div class="stat"><div class="stat-val">${data.total_len}</div><div class="stat-lbl">总交互数</div></div>
+        <div class="stat"><div class="stat-val">${trainItems.length}</div><div class="stat-lbl">训练集</div></div>
+        <div class="stat">${validDisplay}<div class="stat-lbl">验证物品 #${validId}</div></div>
+        <div class="stat">${testDisplay}<div class="stat-lbl">测试物品 #${testId}</div></div>
+      </div>
+    </div>
+    <div id="rec-card"></div>`;
+}
+
+// ── 生成推荐 ─────────────────────────────────────────────────────────
+async function runRecommend() {
+  if (!state.dataset || state.userIdx === null) return;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = '推理中…';
+
+  const recCard = document.getElementById('rec-card');
+  recCard.innerHTML = '<div class="card"><div class="card-head">⏳ 模型推理中…</div>' +
+    '<div class="loading"><div class="spinner"></div>正在计算推荐结果，请稍候…</div></div>';
+
+  try {
+    const res  = await fetch(`${API}/api/recommend/${state.dataset}/${state.userIdx}`);
+    const data = await res.json();
+    if (data.error) { showToast('推理失败：' + data.error); return; }
+    renderRec(data);
+  } catch(e) {
+    showToast('请求失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ 生成推荐';
+  }
+}
+
+// ── 渲染推荐结果 ─────────────────────────────────────────────────────
+function renderRec(data) {
+  const recCard = document.getElementById('rec-card');
+  const answerIdx = data.recommendations.findIndex(r => r.is_answer);
+  const hitTag = answerIdx >= 0
+    ? `<span class="tag" style="background:#0f2d1a;color:var(--green)">
+         ✓ 命中 Top-${answerIdx+1}
+       </span>`
+    : `<span class="tag" style="background:#2d1010;color:var(--red)">✗ 未命中 Top-20</span>`;
+
+  // 正确答案显示
+  const answerLabel = data.answer_title
+    ? `<span title="ID: ${data.answer} · ${data.answer_title}">${truncate(data.answer_title,30)} (ID:${data.answer})</span>`
+    : `ID: ${data.answer}`;
+
+  const items = data.recommendations.map(r => {
+    const hasName = r.title && r.title.length > 0;
+    const tooltip = [r.title, r.brand ? `品牌: ${r.brand}` : '', r.categories].filter(Boolean).join('\n');
+    const metaLine = r.brand
+      ? `<div class="rec-meta" title="${r.brand}">${truncate(r.brand, 24)}</div>`
+      : '';
+    const body = hasName
+      ? `<div class="rec-name" title="${tooltip}">${r.title}</div>
+         ${metaLine}
+         <div class="rec-id-line">ID: ${r.item_id}</div>`
+      : `<div class="rec-id-label">物品 ID</div>
+         <div class="rec-id">${r.item_id}</div>`;
+    return `
+    <div class="rec-item ${r.is_answer ? 'is-answer' : ''}" title="${tooltip}">
+      <div class="rec-rank">#${r.rank}</div>
+      ${body}
+      <div class="rec-score-bar-wrap">
+        <div class="rec-score-bar">
+          <div class="rec-score-fill" style="width:${(r.score_norm*100).toFixed(1)}%"></div>
+        </div>
+        <div class="rec-score-val">相对得分 ${(r.score_norm*100).toFixed(1)}%</div>
+      </div>
+      ${r.is_answer ? '<div class="answer-badge">✓ 正确答案</div>' : ''}
+    </div>`;
+  }).join('');
+
+  recCard.innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        🎯 Top-20 推荐结果
+        <span class="tag tag-answer">正确答案: ${answerLabel}</span>
+        ${hitTag}
+      </div>
+      <div class="rec-grid">${items}</div>
+    </div>`;
+}
+
+// ── 启动 ─────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
